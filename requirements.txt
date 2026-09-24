@@ -1,0 +1,6 @@
+Django>=5.2,<6
+gunicorn>=23
+whitenoise>=6.7
+azure-cognitiveservices-speech>=1.40
+openai>=1.50
+python-dotenv>=1.0

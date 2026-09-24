@@ -1,0 +1,121 @@
+{% load static %}<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Mr. Blake — pronúncia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'teacher/style.css' %}">
+</head>
+<body>
+<main class="app">
+
+  <header class="topbar">
+    <div class="progress-track" aria-label="progresso">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+    <div class="counter" id="progress">0/20</div>
+  </header>
+
+  <!-- Boneco: Rive se existir teacher.riv, senão o SVG abaixo -->
+  <section class="stage" id="stage" data-mood="neutral" data-state="idle">
+    <div class="blob"></div>
+    <canvas id="rive-canvas" class="rive" hidden></canvas>
+    <svg id="face" class="face" viewBox="0 0 200 200" aria-hidden="true">
+      <defs>
+        <clipPath id="head-clip"><ellipse cx="100" cy="100" rx="58" ry="64"/></clipPath>
+      </defs>
+      <!-- corpo: moletom -->
+      <path d="M48 200 L52 176 Q60 160 82 156 L100 166 L118 156 Q140 160 148 176 L152 200 Z" fill="#1cb0f6" stroke="#0e86c2" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M82 156 L100 166 L118 156" fill="none" stroke="#0e86c2" stroke-width="3" stroke-linecap="round"/>
+      <!-- pescoço -->
+      <path d="M88 146 L88 160 Q100 168 112 160 L112 146 Z" fill="#e6a986" stroke="#c9865f" stroke-width="3" stroke-linejoin="round"/>
+      <!-- orelhas -->
+      <ellipse cx="42" cy="104" rx="9" ry="12" fill="#f4c19f" stroke="#3c3c3c" stroke-width="3"/>
+      <ellipse cx="158" cy="104" rx="9" ry="12" fill="#f4c19f" stroke="#3c3c3c" stroke-width="3"/>
+      <!-- cabeça -->
+      <ellipse cx="100" cy="100" rx="58" ry="64" fill="#f4c19f" stroke="#3c3c3c" stroke-width="3"/>
+      <!-- bochechas -->
+      <ellipse cx="66" cy="122" rx="9" ry="5" fill="#ff9aa2" opacity=".55"/>
+      <ellipse cx="134" cy="122" rx="9" ry="5" fill="#ff9aa2" opacity=".55"/>
+      <!-- cabelo -->
+      <path d="M42 96 Q40 44 96 36 Q150 34 158 92 Q150 66 128 62 Q118 70 104 60 Q88 74 72 66 Q54 70 42 96 Z" fill="#4a2f22" stroke="#3c3c3c" stroke-width="3" stroke-linejoin="round"/>
+      <!-- sobrancelhas -->
+      <path id="brow-l" class="brow" d="M62 80 Q76 72 90 78"/>
+      <path id="brow-r" class="brow" d="M110 78 Q124 72 138 80"/>
+      <!-- olhos -->
+      <g id="eyes">
+        <ellipse cx="78" cy="98" rx="10" ry="12" fill="#fff" stroke="#3c3c3c" stroke-width="2.5"/>
+        <ellipse cx="122" cy="98" rx="10" ry="12" fill="#fff" stroke="#3c3c3c" stroke-width="2.5"/>
+        <circle id="pupil-l" cx="80" cy="100" r="5" fill="#2b2b2b"/>
+        <circle id="pupil-r" cx="124" cy="100" r="5" fill="#2b2b2b"/>
+        <circle cx="82" cy="97" r="1.6" fill="#fff"/>
+        <circle cx="126" cy="97" r="1.6" fill="#fff"/>
+        <ellipse id="lid-l" cx="78" cy="98" rx="10.5" ry="0" fill="#f4c19f"/>
+        <ellipse id="lid-r" cx="122" cy="98" rx="10.5" ry="0" fill="#f4c19f"/>
+      </g>
+      <!-- óculos -->
+      <g class="glasses" fill="none" stroke="#3c3c3c" stroke-width="3">
+        <rect x="63" y="85" width="30" height="26" rx="10"/>
+        <rect x="107" y="85" width="30" height="26" rx="10"/>
+        <path d="M93 97 L107 97"/>
+        <path d="M63 95 L46 92"/><path d="M137 95 L154 92"/>
+      </g>
+      <!-- nariz -->
+      <path d="M100 106 Q94 122 103 124" fill="none" stroke="#c9865f" stroke-width="3" stroke-linecap="round"/>
+      <!-- boca (mesmos ids/coordenadas do avatar.js) -->
+      <g id="mouth-group">
+        <path id="mouth" d="M78 140 Q100 146 122 140 Q100 146 78 140 Z" fill="#7a2b2b" stroke="#3c3c3c" stroke-width="2.5" stroke-linejoin="round"/>
+        <path id="teeth" d="" fill="#fff"/>
+        <path id="tongue" d="" fill="#e0605f"/>
+      </g>
+    </svg>
+    <div class="state-label" id="state-label">toque em Começar</div>
+  </section>
+
+  <section class="bubble" id="bubble">
+    <p id="teacher-text">Oi! Eu sou o Mr. Blake. Vamos treinar sua pronúncia?</p>
+  </section>
+
+  <section class="card target-card">
+    <div class="label" id="target-label">Repete essa:</div>
+    <div class="reference" id="reference">—</div>
+    <div class="hint" id="sentence-hint" hidden></div>
+    <div class="focus" id="focus" hidden></div>
+  </section>
+
+  <section class="card transcript" id="transcript-card" hidden>
+    <div class="row-head">
+      <div class="label">Você disse</div>
+      <div class="scores" id="scores" hidden>
+        <span class="score"><b id="s-overall">–</b> geral</span>
+        <span class="score"><b id="s-accuracy">–</b> sons</span>
+        <span class="score"><b id="s-fluency">–</b> fluência</span>
+      </div>
+    </div>
+    <div class="words" id="words"></div>
+  </section>
+
+  <footer class="controls">
+    <div class="error" id="error" hidden></div>
+    <button class="btn ghost" id="btn-replay" hidden>ouvir de novo</button>
+    <button class="btn primary" id="btn-start">Começar</button>
+    <button class="btn record" id="btn-record" hidden>
+      <span class="ring"></span>
+      <span class="txt">Segure para falar</span>
+      <span class="timer" id="timer">0.0s</span>
+    </button>
+  </footer>
+
+</main>
+
+<script src="{% static 'teacher/recorder.js' %}"></script>
+<script src="{% static 'teacher/avatar.js' %}"></script>
+<script src="{% static 'teacher/app.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+staticfiles/
+*.wav
+!scripts/samples/*.wav
+.venv/
