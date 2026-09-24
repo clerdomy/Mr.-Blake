@@ -20,8 +20,8 @@ django.setup()
 
 from teacher.services import azure_speech  # noqa: E402
 
-FRASE = ("Fink? Não, meu amigo. É THINK, com a língua entre os dentes. "
-         "Repete comigo: I think the weather is really nice today.")
+FRASE = ("Fink? Não, meu amigo. É [think], com a língua entre os dentes. "
+         "Repete comigo: [I think the weather is really nice today].")
 
 PADRAO = [
     "en-US-Andrew:DragonHDOmniLatestNeural",

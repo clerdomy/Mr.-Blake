@@ -51,7 +51,7 @@ def _openai(text: str, mood: str) -> dict:
     resp = client.audio.speech.create(
         model=settings.OPENAI_TTS_MODEL,
         voice=settings.OPENAI_TTS_VOICE,
-        input=text,
+        input=text.replace("[", "").replace("]", ""),
         instructions=OPENAI_TONE.get(mood, OPENAI_TONE["neutral"]),
         response_format="mp3",
     )

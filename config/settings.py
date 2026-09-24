@@ -94,7 +94,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ---- Integrações -------------------------------------------------------------
 AZURE_SPEECH_KEY = os.environ.get("AZURE_SPEECH_KEY", "")
 AZURE_SPEECH_REGION = os.environ.get("AZURE_SPEECH_REGION", "eastus")
-AZURE_TTS_VOICE = os.environ.get("AZURE_TTS_VOICE", "en-US-Andrew:DragonHDOmniLatestNeural")
+AZURE_TTS_VOICE = os.environ.get("AZURE_TTS_VOICE", "pt-BR-Antonio:DragonHDOmniLatestNeural")
 
 # Voz do professor: "azure" (com visemas) ou "openai" (voz mais natural, boca por volume)
 TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "azure")

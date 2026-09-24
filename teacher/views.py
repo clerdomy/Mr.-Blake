@@ -57,6 +57,7 @@ def api_start(request):
     request.session["coach"] = state
     request.session["history"] = [{"role": "assistant", "content": opening["reply"]}]
     payload = {**opening, **_target_payload(state), "event": "start"}
+    payload["reply"] = azure_speech.strip_marks(opening["reply"])
     try:
         payload["speech"] = _speak(opening["reply"], opening["mood"])
     except Exception as e:
@@ -109,6 +110,7 @@ def api_assess(request):
 
     payload = {"reference": reference, "summary": summary, "event": event,
                **reply, **_target_payload(new_state)}
+    payload["reply"] = azure_speech.strip_marks(reply["reply"])
     try:
         payload["speech"] = _speak(reply["reply"], reply["mood"])
     except Exception as e:

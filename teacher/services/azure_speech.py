@@ -3,6 +3,7 @@ Azure Speech: avaliação de pronúncia (Pronunciation Assessment) e TTS com vis
 Docs: https://learn.microsoft.com/azure/ai-services/speech-service/how-to-pronunciation-assessment
 """
 import io
+import re
 import json
 import logging
 import wave
@@ -77,6 +78,39 @@ def assess_pronunciation(wav_bytes: bytes, reference_text: str, language: str = 
 # ---------------------------------------------------------------------------
 # TTS com visemas (para o boneco mexer a boca)
 # ---------------------------------------------------------------------------
+_EN_MARK = re.compile(r"\[([^\[\]]+)\]")
+
+
+def _esc(t: str) -> str:
+    return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def build_mixed_language_ssml(text: str) -> str:
+    """
+    O professor marca inglês entre colchetes: "Não é [fink], é [think]."
+    Vira: <lang xml:lang="pt-BR">Não é </lang><lang xml:lang="en-US">fink</lang>...
+    Vozes multilíngues/HD respeitam <lang>; vozes comuns ignoram sem erro.
+    """
+    parts = []
+    pos = 0
+    for m in _EN_MARK.finditer(text):
+        pt = text[pos:m.start()]
+        if pt.strip():
+            parts.append(f'<lang xml:lang="pt-BR">{_esc(pt)}</lang>')
+        elif pt:
+            parts.append(_esc(pt))
+        parts.append(f'<lang xml:lang="en-US">{_esc(m.group(1))}</lang>')
+        pos = m.end()
+    rest = text[pos:]
+    if rest.strip():
+        parts.append(f'<lang xml:lang="pt-BR">{_esc(rest)}</lang>')
+    return "".join(parts) or _esc(text)
+
+
+def strip_marks(text: str) -> str:
+    """Remove os colchetes para exibir na tela."""
+    return _EN_MARK.sub(r"\1", text)
+
 def synthesize_with_visemes(text: str, voice: str | None = None, style: str | None = None) -> dict:
     """
     Sintetiza `text` e devolve {"audio_mp3": bytes, "visemes": [[ms, viseme_id], ...]}.
@@ -100,9 +134,7 @@ def synthesize_with_visemes(text: str, voice: str | None = None, style: str | No
 
     synthesizer.viseme_received.connect(on_viseme)
 
-    safe = (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
+    safe = build_mixed_language_ssml(text)
     # Vozes multilíngues e DragonHD (não-Omni) não aceitam estilos (express-as);
     # usar daria erro e retry. Vozes HD também não emitem visemas: a lista volta
     # vazia e o front anima a boca pelo volume do áudio.

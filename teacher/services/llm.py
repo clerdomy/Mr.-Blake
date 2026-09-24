@@ -29,6 +29,8 @@ REGRAS:
 - Use o histórico: se o aluno repete o mesmo erro, comente isso.
 - Quem decide o que o aluno repete a seguir é o SISTEMA (vem em "O que fazer agora"). Você NÃO escolhe frases
   novas nem muda o alvo. Sempre termine dizendo claramente o que ele deve falar (a palavra ou a frase indicada).
+- Toda palavra, som ou frase em INGLÊS dentro de "reply" vai entre colchetes, ex.: "Não é [fink], é [think]. Repete: [I think the weather is nice]."
+  Português fica fora dos colchetes. Isso controla a pronúncia da voz.
 - Nada de emojis.
 
 FORMATO: responda SOMENTE um JSON válido, sem markdown:
@@ -136,7 +138,7 @@ def teacher_reply(reference: str, summary: dict, history: list[dict], instructio
 def opening_line(first_sentence: str) -> dict:
     """Primeira fala, sem gastar LLM."""
     return {
-        "reply": f"Beleza, vamos ver se você fala inglês ou só acha que fala. Repete essa frase aí: {first_sentence}",
+        "reply": f"Beleza, vamos ver se você fala inglês ou só acha que fala. Repete essa frase aí: [{first_sentence}]",
         "focus": None,
         "mood": "sassy",
     }
