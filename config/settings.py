@@ -21,8 +21,16 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 CSRF_TRUSTED_ORIGINS = [
-    o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o
+    o.strip().rstrip("/") for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
 ]
+# Azure Container Apps injeta o domínio do app nesta variável: confia nele automaticamente.
+_aca_host = os.environ.get("CONTAINER_APP_HOSTNAME")
+if _aca_host:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_aca_host}")
+# Atrás do ingress do Azure / Cloud Run o HTTPS termina no proxy e o Django recebe HTTP;
+# este header diz ao Django que a conexão original era segura.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
