@@ -1,0 +1,16 @@
+{
+  "name": "Mr. Blake — pronúncia de inglês",
+  "short_name": "Mr. Blake",
+  "description": "Treine pronúncia de inglês com um professor que não deixa passar nada.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1cb0f6",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/static/teacher/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/teacher/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

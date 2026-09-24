@@ -3,7 +3,9 @@ import logging
 
 from django.conf import settings
 from django.http import JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import render
+from django.contrib.staticfiles import finders
 from django.views.decorators.http import require_POST
 
 from .services import azure_speech, coach, llm, tts
@@ -17,6 +19,16 @@ MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 def index(request):
     return render(request, "teacher/index.html")
+
+
+def service_worker(request):
+    """Serve o sw.js na raiz (o escopo de um service worker é limitado ao caminho dele)."""
+    path = finders.find("teacher/sw.js")
+    with open(path, "rb") as f:
+        resp = HttpResponse(f.read(), content_type="application/javascript")
+    resp["Service-Worker-Allowed"] = "/"
+    resp["Cache-Control"] = "no-cache"
+    return resp
 
 
 def _speak(text: str, mood: str) -> dict:

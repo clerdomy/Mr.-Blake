@@ -4,9 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="csrf-token" content="{{ csrf_token }}">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#1cb0f6">
+<link rel="manifest" href="{% static 'teacher/manifest.webmanifest' %}">
+<link rel="icon" href="{% static 'teacher/icon-192.png' %}">
+<link rel="apple-touch-icon" href="{% static 'teacher/icon-192.png' %}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Mr. Blake">
 <title>Mr. Blake — pronúncia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
@@ -117,5 +121,10 @@
 <script src="{% static 'teacher/recorder.js' %}"></script>
 <script src="{% static 'teacher/avatar.js' %}"></script>
 <script src="{% static 'teacher/app.js' %}"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch((e) => console.info("sem service worker", e));
+  }
+</script>
 </body>
 </html>
