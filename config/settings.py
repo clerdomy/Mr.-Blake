@@ -95,6 +95,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AZURE_SPEECH_KEY = os.environ.get("AZURE_SPEECH_KEY", "")
 AZURE_SPEECH_REGION = os.environ.get("AZURE_SPEECH_REGION", "eastus")
 AZURE_TTS_VOICE = os.environ.get("AZURE_TTS_VOICE", "pt-BR-Antonio:DragonHDOmniLatestNeural")
+# Voz específica para as instruções e explicações em português.
+AZURE_TTS_VOICE_PT = os.environ.get("AZURE_TTS_VOICE_PT", "pt-BR-MacerioMultilingualNeural")
 
 # Voz do professor: "azure" (com visemas) ou "openai" (voz mais natural, boca por volume)
 TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "azure")
@@ -107,6 +109,11 @@ OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "ash")
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "openai/gpt-oss-120b")
+LLM_TIMEOUT_SECONDS = float(os.environ.get("LLM_TIMEOUT_SECONDS", "30"))
+LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "0"))
+TTS_TIMEOUT_SECONDS = float(os.environ.get("TTS_TIMEOUT_SECONDS", "30"))
+TTS_CACHE_TTL_SECONDS = float(os.environ.get("TTS_CACHE_TTL_SECONDS", "300"))
+TTS_CACHE_MAX_BYTES = int(os.environ.get("TTS_CACHE_MAX_BYTES", "8388608"))
 
 # Nível de "provocação" do professor: 1 (gentil) a 3 (sem dó)
 TEACHER_SASS_LEVEL = int(os.environ.get("TEACHER_SASS_LEVEL", "2"))

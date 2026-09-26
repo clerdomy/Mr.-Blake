@@ -16,6 +16,7 @@
 
   let recorder = null;
   let busy = false;
+  let recordingRequested = false;
   let reference = "";
 
   const setLabel = (t) => { ui.stateLabel.textContent = t; };
@@ -30,6 +31,7 @@
 
   function renderTarget(data) {
     reference = data.next_reference;
+    ui.reference.textContent = reference || "—";
     const word = data.mode === "word";
     ui.targetLabel.textContent = word ? "Só essa palavra:" : "Repete essa:";
     ui.reference.classList.toggle("word-mode", word);
@@ -47,26 +49,49 @@
     ui.focus.hidden = !data.focus;
     ui.focus.textContent = data.focus ? `foco: ${data.focus}` : "";
     ui.stage.classList.remove("flash-pass", "flash-word");
-    void ui.stage.offsetWidth;
-    if (data.event === "sentence_pass" || data.event === "word_pass") ui.stage.classList.add("flash-pass");
-    if (data.event === "enter_word") ui.stage.classList.add("flash-word");
+    const flash = data.event === "sentence_pass" || data.event === "word_pass"
+      ? "flash-pass" : data.event === "enter_word" ? "flash-word" : null;
+    if (flash) {
+      void ui.stage.offsetWidth;
+      ui.stage.classList.add(flash);
+    }
   }
 
   async function playTeacher(data) {
+    ui.btnRecord.disabled = true;
+    ui.btnReplay.hidden = true;
+    ui.btnReplay.disabled = true;
+    avatar.lastAudio = null;
     ui.teacherText.textContent = data.reply;
     avatar.setMood(data.mood);
     renderTarget(data);
-    if (data.speech) {
-      ui.btnRecord.disabled = true;
-      setLabel("falando…");
-      await avatar.speak(data.speech.audio_b64, data.speech.visemes);
-      ui.btnReplay.hidden = false;
-    } else if (data.tts_error) {
-      showError("Sem voz: " + data.tts_error);
+    renderWords(data.summary);
+    try {
+      let speech = data.speech;
+      if (!speech && data.speech_token) {
+        setLabel("preparando a voz…");
+        const fd = new FormData();
+        fd.append("speech_token", data.speech_token);
+        const result = await post("/api/speech", fd);
+        speech = result.speech;
+        if (!speech?.audio_b64) throw new Error("Áudio indisponível.");
+      }
+      if (speech) {
+        setLabel("falando…");
+        await avatar.speak(speech.audio_b64, speech.visemes);
+        ui.btnReplay.hidden = false;
+        ui.btnReplay.disabled = false;
+      } else if (data.tts_error) {
+        throw new Error(data.tts_error);
+      }
+    } catch (e) {
+      avatar.lastAudio = null;
+      showError("Sem voz: " + e.message);
+    } finally {
+      avatar.setState("idle");
+      ui.btnRecord.disabled = false;
+      setLabel("sua vez — segure o botão");
     }
-    renderTarget(data);
-    ui.btnRecord.disabled = false;
-    setLabel("sua vez — segure o botão");
   }
 
   function renderWords(summary) {
@@ -96,6 +121,8 @@
 
   // ---- começar ----
   ui.btnStart.addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
     showError("");
     ui.btnStart.disabled = true;
     setLabel("chamando o professor…");
@@ -103,13 +130,17 @@
       // Pede permissão do mic já no gesto do usuário (iOS exige)
       try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop()); }
       catch (_) { showError("Preciso do microfone para funcionar."); ui.btnStart.disabled = false; return; }
-      const data = await post("/api/start", new FormData());
+      const fd = new FormData();
+      fd.append("defer_speech", "1");
+      const data = await post("/api/start", fd);
       ui.btnStart.hidden = true;
       ui.btnRecord.hidden = false;
       await playTeacher(data);
     } catch (e) {
       showError(e.message);
       ui.btnStart.disabled = false;
+    } finally {
+      busy = false;
     }
   });
 
@@ -118,23 +149,37 @@
     ev.preventDefault();
     if (busy || ui.btnRecord.disabled) return;
     busy = true;
+    recordingRequested = true;
     showError("");
-    recorder = new WavRecorder({ maxSeconds: 15 });
+    recorder = recorder || new WavRecorder({ maxSeconds: 15 });
     recorder.onTick = (s) => { ui.timer.textContent = s.toFixed(1) + "s"; };
     recorder.onMax = () => stopRecording();
     try {
-      await recorder.start();
+      const started = await recorder.start();
+      if (!started || !recordingRequested) {
+        await recorder.stop();
+        busy = false;
+        setLabel("segure o botão para falar");
+        return;
+      }
       ui.btnRecord.classList.add("active");
       avatar.setState("listening");
       setLabel("ouvindo…");
     } catch (e) {
       busy = false;
+      recordingRequested = false;
       showError("Não consegui abrir o microfone: " + e.message);
     }
   }
 
   async function stopRecording() {
-    if (!recorder || !recorder.recording) return;
+    if (!recorder || !recordingRequested) return;
+    recordingRequested = false;
+    if (!recorder.recording) {
+      // Cancela getUserMedia pendente; startRecording libera busy ao terminar.
+      await recorder.stop();
+      return;
+    }
     ui.btnRecord.classList.remove("active");
     const blob = await recorder.stop();
     ui.timer.textContent = "0.0s";
@@ -149,8 +194,8 @@
       const fd = new FormData();
       fd.append("audio", blob, "aluno.wav");
       fd.append("reference", reference);
+      fd.append("defer_speech", "1");
       const data = await post("/api/assess", fd);
-      renderWords(data.summary);
       await playTeacher(data);
     } catch (e) {
       showError(e.message);
@@ -165,8 +210,23 @@
   ui.btnRecord.addEventListener("pointerdown", startRecording);
   ui.btnRecord.addEventListener("pointerup", stopRecording);
   ui.btnRecord.addEventListener("pointercancel", stopRecording);
-  ui.btnRecord.addEventListener("pointerleave", () => { if (recorder && recorder.recording) stopRecording(); });
+  ui.btnRecord.addEventListener("pointerleave", stopRecording);
   ui.btnRecord.addEventListener("contextmenu", (e) => e.preventDefault());
 
-  ui.btnReplay.addEventListener("click", () => { if (!busy) avatar.replay(); });
+  ui.btnReplay.addEventListener("click", async () => {
+    if (busy || ui.btnReplay.hidden || ui.btnReplay.disabled) return;
+    busy = true;
+    ui.btnRecord.disabled = true;
+    ui.btnReplay.disabled = true;
+    try { await avatar.replay(); }
+    finally { busy = false; ui.btnRecord.disabled = false; ui.btnReplay.disabled = false; }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && recordingRequested) stopRecording();
+  });
+  window.addEventListener("pagehide", () => {
+    recordingRequested = false;
+    recorder?.close();
+    avatar.stop();
+  });
 })();

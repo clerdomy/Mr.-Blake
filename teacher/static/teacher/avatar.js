@@ -79,6 +79,8 @@ class Avatar {
   setViseme(id) {
     if (this.rive) { if (this.inputs.viseme) this.inputs.viseme.value = id; return; }
     const shape = MOUTHS[VISEME_TO_MOUTH[id] || "closed"];
+    if (this._mouthShape === shape) return;
+    this._mouthShape = shape;
     this.mouth.setAttribute("d", shape.mouth);
     this.teeth.setAttribute("d", shape.teeth);
     this.tongue.setAttribute("d", shape.tongue);
@@ -99,6 +101,7 @@ class Avatar {
    * Devolve uma Promise que resolve quando o áudio termina.
    */
   speak(audioB64, visemes) {
+    this.stop();
     return new Promise((resolve) => {
       const audio = new Audio("data:audio/mp3;base64," + audioB64);
       this.lastAudio = { audioB64, visemes };
@@ -107,22 +110,23 @@ class Avatar {
       const hasVisemes = visemes && visemes.length > 0;
 
       // Sem visemas (ex.: voz da OpenAI): anima a boca pelo volume do áudio.
-      let analyser = null, buf = null;
+      let analyser = null, buf = null, source = null, finished = false;
       if (!hasVisemes) {
         try {
           const AC = window.AudioContext || window.webkitAudioContext;
           self._ctx = self._ctx || new AC();
-          if (self._ctx.state === "suspended") self._ctx.resume();
-          const src = self._ctx.createMediaElementSource(audio);
+          if (self._ctx.state === "suspended") self._ctx.resume().catch(() => {});
+          source = self._ctx.createMediaElementSource(audio);
           analyser = self._ctx.createAnalyser();
           analyser.fftSize = 512;
           analyser.smoothingTimeConstant = 0.4;
-          src.connect(analyser);
+          source.connect(analyser);
           analyser.connect(self._ctx.destination);
           buf = new Uint8Array(analyser.fftSize);
         } catch (e) { console.warn("sem analyser, boca fixa", e); }
       }
       const tick = () => {
+        if (finished) return;
         if (hasVisemes) {
           const ms = audio.currentTime * 1000;
           while (idx < visemes.length && visemes[idx][0] <= ms) { self.setViseme(visemes[idx][1]); idx++; }
@@ -140,8 +144,23 @@ class Avatar {
         }
         if (!audio.ended && !audio.paused) self._raf = requestAnimationFrame(tick);
       };
-      audio.onplay = () => { self.setState("talking"); tick(); };
-      const done = () => { cancelAnimationFrame(self._raf); self.setViseme(0); self.setState("idle"); resolve(); };
+      audio.onplaying = () => {
+        cancelAnimationFrame(self._raf);
+        self.setState("talking"); tick();
+      };
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        cancelAnimationFrame(self._raf);
+        audio.onplaying = audio.onended = audio.onerror = null;
+        audio.pause();
+        source?.disconnect();
+        analyser?.disconnect();
+        self._stopPlayback = null;
+        self.setViseme(0); self.setState("idle");
+        resolve();
+      };
+      self._stopPlayback = done;
       audio.onended = done;
       audio.onerror = done;
       audio.play().catch((e) => { console.warn("autoplay bloqueado?", e); done(); });
@@ -153,13 +172,19 @@ class Avatar {
     return Promise.resolve();
   }
 
+  stop() {
+    if (this._stopPlayback) this._stopPlayback();
+  }
+
   // ---- vida no rosto SVG ----
   _startBlinking() {
     const lids = [this.stage.querySelector("#lid-l"), this.stage.querySelector("#lid-r")];
     if (!lids[0]) return;
     const blink = () => {
-      lids.forEach((l) => l.setAttribute("ry", 11));
-      setTimeout(() => lids.forEach((l) => l.setAttribute("ry", 0)), 120);
+      if (!document.hidden && !this.rive) {
+        lids.forEach((l) => l.setAttribute("ry", 11));
+        setTimeout(() => lids.forEach((l) => l.setAttribute("ry", 0)), 120);
+      }
       setTimeout(blink, 2500 + Math.random() * 3000);
     };
     setTimeout(blink, 1500);
@@ -169,9 +194,11 @@ class Avatar {
     const p = [this.stage.querySelector("#pupil-l"), this.stage.querySelector("#pupil-r")];
     if (!p[0]) return;
     const look = () => {
-      const dx = (Math.random() - 0.5) * 5, dy = (Math.random() - 0.5) * 3;
-      p[0].setAttribute("cx", 80 + dx); p[0].setAttribute("cy", 98 + dy);
-      p[1].setAttribute("cx", 124 + dx); p[1].setAttribute("cy", 98 + dy);
+      if (!document.hidden && !this.rive) {
+        const dx = (Math.random() - 0.5) * 5, dy = (Math.random() - 0.5) * 3;
+        p[0].setAttribute("cx", 80 + dx); p[0].setAttribute("cy", 98 + dy);
+        p[1].setAttribute("cx", 124 + dx); p[1].setAttribute("cy", 98 + dy);
+      }
       setTimeout(look, 1200 + Math.random() * 2500);
     };
     look();

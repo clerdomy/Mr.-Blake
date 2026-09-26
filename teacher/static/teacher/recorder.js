@@ -12,54 +12,105 @@ class WavRecorder {
     this.recording = false;
     this.onTick = null;
     this.onMax = null;
+    this._generation = 0;
+    this._starting = false;
   }
 
   async start() {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-    const AC = window.AudioContext || window.webkitAudioContext;
-    this.ctx = new AC();
-    if (this.ctx.state === "suspended") await this.ctx.resume();
-    this.sourceRate = this.ctx.sampleRate;
+    if (this.recording || this._starting) return false;
+    this._starting = true;
+    const generation = ++this._generation;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      // Reutiliza o contexto, mas abre o microfone somente enquanto o botão é segurado.
+      if (!this.ctx || this.ctx.state === "closed") this.ctx = new AC();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      if (generation !== this._generation) {
+        stream.getTracks().forEach((t) => t.stop());
+        return false;
+      }
+      this.stream = stream;
+      await this._suspending;
+      if (generation !== this._generation) return false;
+      if (this.ctx.state === "suspended") await this.ctx.resume();
+      if (generation !== this._generation) return false;
+      this.sourceRate = this.ctx.sampleRate;
+      this.source = this.ctx.createMediaStreamSource(stream);
+      this.processor = this.ctx.createScriptProcessor(2048, 1, 1);
+      this.chunks = [];
+      this.recording = true;
+      this.startedAt = performance.now();
+      let lastTick = -100;
+      this.processor.onaudioprocess = (e) => {
+        if (!this.recording) return;
+        this.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+        const elapsedMs = performance.now() - this.startedAt;
+        if (this.onTick && elapsedMs - lastTick >= 100) {
+          lastTick = elapsedMs;
+          this.onTick(elapsedMs / 1000);
+        }
+      };
+      this.source.connect(this.processor);
+      // Precisa conectar no destination para o processor rodar no Safari.
+      this.gain = this.ctx.createGain();
+      this.gain.gain.value = 0;
+      this.processor.connect(this.gain);
+      this.gain.connect(this.ctx.destination);
+      this._maxTimer = setTimeout(() => {
+        if (this.recording) {
+          if (this.onMax) this.onMax();
+          else this.stop();
+        }
+      }, this.maxSeconds * 1000);
+      return true;
+    } catch (error) {
+      this.recording = false;
+      throw error;
+    } finally {
+      this._starting = false;
+      if (!this.recording) this._release();
+    }
+  }
 
-    this.source = this.ctx.createMediaStreamSource(this.stream);
-    this.processor = this.ctx.createScriptProcessor(4096, 1, 1);
-    this.chunks = [];
-    this.recording = true;
-    this.startedAt = performance.now();
-
-    this.processor.onaudioprocess = (e) => {
-      if (!this.recording) return;
-      this.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-      const elapsed = (performance.now() - this.startedAt) / 1000;
-      if (this.onTick) this.onTick(elapsed);
-      if (elapsed >= this.maxSeconds && this.onMax) this.onMax();
-    };
-    this.source.connect(this.processor);
-    // Precisa conectar no destination para o processor rodar no Safari
-    this.gain = this.ctx.createGain();
-    this.gain.gain.value = 0;
-    this.processor.connect(this.gain);
-    this.gain.connect(this.ctx.destination);
+  _release() {
+    clearTimeout(this._maxTimer);
+    if (this.processor) this.processor.onaudioprocess = null;
+    for (const name of ["source", "processor", "gain"]) {
+      try { this[name]?.disconnect(); } catch (_) {}
+      this[name] = null;
+    }
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+    // Suspender não bloqueia a codificação nem o envio do WAV.
+    if (this.ctx && this.ctx.state !== "closed") {
+      this._suspending = this.ctx.suspend().catch(() => {});
+    }
   }
 
   /** Para a gravação e devolve um Blob WAV. */
   async stop() {
-    if (!this.recording) return null;
+    ++this._generation; // Também cancela a abertura assíncrona do microfone.
+    const wasRecording = this.recording;
     this.recording = false;
-    try { this.source.disconnect(); this.processor.disconnect(); this.gain.disconnect(); } catch (_) {}
-    this.stream.getTracks().forEach((t) => t.stop());
-    const ctx = this.ctx;
-    this.ctx = null;
-    try { await ctx.close(); } catch (_) {}
+    this._release();
+    if (!wasRecording) return null;
 
     const total = this.chunks.reduce((n, c) => n + c.length, 0);
     const merged = new Float32Array(total);
     let off = 0;
     for (const c of this.chunks) { merged.set(c, off); off += c.length; }
     const down = WavRecorder.downsample(merged, this.sourceRate, this.targetRate);
+    this.chunks = [];
     return WavRecorder.encodeWav(down, this.targetRate);
+  }
+
+  async close() {
+    await this.stop();
+    const ctx = this.ctx;
+    this.ctx = null;
+    if (ctx && ctx.state !== "closed") await ctx.close().catch(() => {});
   }
 
   static downsample(buffer, fromRate, toRate) {

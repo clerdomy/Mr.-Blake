@@ -63,7 +63,48 @@ a imagem no GitHub Container Registry (grátis) e usar `--image ghcr.io/<user>/l
 Alternativa no Google: `gcloud run deploy lean-ingles --source . --region us-east1 --allow-unauthenticated --memory 1Gi`
 com as mesmas variáveis em `--set-env-vars`.
 
-Não há banco: a conversa vive num cookie de sessão assinado (últimas 6 trocas).
+Não há banco: a conversa vive num cookie de sessão assinado (até 6 trocas).
+O histórico é compactado e as trocas mais antigas saem quando o cookie atinge
+o orçamento de 3.800 bytes, preservando JSON completo e o alvo atual.
+
+## Desempenho e diagnóstico
+
+As APIs `/api/start` e `/api/assess` retornam `Server-Timing` com o tempo de
+`audio` (conversão), `assessment` (avaliação), `llm`, `tts` e `total`, conforme
+as etapas executadas. Esses tempos também aparecem no log do servidor sem
+registrar a gravação ou as credenciais. No navegador, consulte a requisição
+na aba Network das ferramentas de desenvolvimento. `total` mede a view;
+não inclui upload, middleware, transferência da resposta ou reprodução.
+
+O cliente HTTP da IA é reutilizado por processo. `LLM_TIMEOUT_SECONDS=30`
+limita a espera de cada operação de rede e `LLM_MAX_RETRIES=0` evita tentativas
+automáticas acumuladas. Erros de parâmetro incompatível têm fallback específico;
+autenticação, rate limit e erro de serviço não disparam três pedidos diferentes.
+`TTS_TIMEOUT_SECONDS=30` se aplica às chamadas OpenAI TTS.
+
+Áudios idênticos do professor são reutilizados por até 5 minutos, com limite
+de 8 MiB e 64 entradas por processo; falhas não entram no cache. Voz, provedor,
+idiomas e humor participam da chave. `TTS_CACHE_TTL_SECONDS=0` desliga esse cache;
+`TTS_CACHE_MAX_BYTES` altera o orçamento. O cache não armazena gravações do aluno
+e é perdido no reinício. Trechos consecutivos no mesmo idioma são agrupados
+para reduzir chamadas OpenAI, preservando as demonstrações de sons isolados.
+
+O navegador reutiliza o contexto de gravação, libera o microfone ao soltar o
+botão e desconecta os nós de reprodução ao terminar. O service worker usa
+cache direto para assets com hash gerados pelo `collectstatic`; HTML com CSRF
+e chamadas de API continuam na rede. Sem conexão, não é possível abrir uma
+nova aula.
+
+Validação local, sem chamadas aos provedores:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py test teacher
+node --test scripts/test_frontend.cjs
+```
+
+Os testes verificam chamadas evitadas, reuso de recursos, limites do cache,
+validade da sessão e os fluxos de aula. Eles não medem a latência real da rede
+nem substituem a conferência do microfone e da voz em um celular.
 
 ## O boneco (Rive)
 
